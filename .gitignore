@@ -1,0 +1,56 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.o
+*.so
+*.dylib
+*.dll
+
+# Backup files
+*.backup
+*.bak
+
+# Logs
+*.log
+
+# Env files
+.env
+.env.*
+
+# Coverage and profiling
+*.profraw
+*.profdata
+coverage/
+target/llvm-cov/
+
+# Direnv
+.direnv/
+.envrc
+
+# Rust analyzer
+rust-project.json
+
+# Cargo Home caches (if CARGO_HOME is set to project dir)
+# Keep `.cargo/config*` committed when present
+.cargo/bin/
+.cargo/registry/
+.cargo/git/
+
+# Project-local Cargo Home directory
+/.cargo-home/
+
