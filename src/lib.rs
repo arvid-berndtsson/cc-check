@@ -247,9 +247,17 @@ mod tests {
             std::env::set_current_dir(&temp_path).unwrap();
             // Verify we're in the right directory and the file exists
             let current = std::env::current_dir().unwrap();
-            assert!(cargo_toml.exists(), "Cargo.toml should exist at {:?}", cargo_toml);
-            assert!(current.join("Cargo.toml").exists(), "Cargo.toml should exist in current dir {:?}", current);
-            
+            assert!(
+                cargo_toml.exists(),
+                "Cargo.toml should exist at {:?}",
+                cargo_toml
+            );
+            assert!(
+                current.join("Cargo.toml").exists(),
+                "Cargo.toml should exist in current dir {:?}",
+                current
+            );
+
             let root = find_repo_root().unwrap();
             // Use canonicalize to handle symlink differences (e.g., /var vs /private/var on macOS)
             let expected = temp_path;
