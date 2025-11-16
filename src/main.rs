@@ -139,7 +139,7 @@ fn install_hook(no_build: bool) -> Result<()> {
     }
 
     let git_dir = String::from_utf8(git_dir_output.stdout)?.trim().to_string();
-    let git_dir = if git_dir.starts_with('/') || git_dir.starts_with('\\') {
+    let git_dir = if PathBuf::from(&git_dir).is_absolute() {
         PathBuf::from(git_dir)
     } else {
         std::env::current_dir()?.join(git_dir)
