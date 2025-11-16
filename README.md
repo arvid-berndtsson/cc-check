@@ -153,7 +153,8 @@ repos:
     hooks:
       - id: conventional-commit-check
         name: Conventional Commit Checker (Rust)
-        entry: target/release/pre-commit-hook
+        entry: cargo
+        args: ['run', '--quiet', '--release', '--bin', 'pre-commit-hook', '--']
         language: system
         stages: [commit-msg]
         pass_filenames: true
@@ -166,13 +167,16 @@ Install and enable pre-commit in your repo:
 pre-commit install --hook-type commit-msg
 ```
 
-Build the release binary (required for the hook to work):
+The configuration uses `cargo run` to execute the `pre-commit-hook` binary, which will:
+- Use the built `cc-check` binary if available (`target/release/cc-check` or `target/debug/cc-check`)
+- Fall back to `cargo run --release --bin cc-check` if the binary doesn't exist yet
 
+**Note:** For best performance, build the release binaries:
 ```bash
 cargo build --release
 ```
 
-The `pre-commit-hook` binary will automatically find and execute the main `cc-check` binary, falling back to `cargo run` if the binary isn't built yet.
+This ensures the hook runs quickly without needing to compile on each commit. The first run may be slower as it compiles the binaries, but subsequent runs will use the cached binaries.
 
 ## Building
 

@@ -16,6 +16,9 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install target
+        run: rustup target add x86_64-unknown-linux-gnu
+
       - name: Build
         run: cargo build --release --target x86_64-unknown-linux-gnu
 
@@ -205,9 +208,6 @@ jobs:
         id: tag
         run: echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -215,48 +215,16 @@ jobs:
         run: cargo build --release --bin postinstall
 
       - name: Download binaries from GitHub Release
+        uses: ./.github/actions/download-binaries
+        with:
+          tag: ${{ steps.tag.outputs.TAG }}
+          target-dir: bin
+          naming-convention: npm
+
+      - name: Copy postinstall binary
         run: |
-          mkdir -p bin
-          TAG="${{ steps.tag.outputs.TAG }}"
-          REPO="${{ github.repository }}"
-          
-          # Download all platform binaries
-          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/json" \
-            "https://api.github.com/repos/${REPO}/releases/tags/${TAG}" | \
-            jq -r '.assets[] | select(.name | test("^cc-check-.*\\.(tar\\.gz|zip)$")) | .browser_download_url' | \
-            while read url; do
-              filename=$(basename "$url")
-              curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                -H "Accept: application/octet-stream" \
-                "$url" -o "/tmp/${filename}"
-              
-              # Extract binaries
-              case "$filename" in
-                *linux-x86_64.tar.gz)
-                  tar -xzf "/tmp/${filename}" -C bin/ && mv bin/cc-check-linux-x86_64 bin/cc-check-linux-x64 || true
-                  ;;
-                *linux-arm64.tar.gz)
-                  tar -xzf "/tmp/${filename}" -C bin/ && mv bin/cc-check-linux-arm64 bin/cc-check-linux-aarch64 || true
-                  ;;
-                *macos-x86_64.tar.gz)
-                  tar -xzf "/tmp/${filename}" -C bin/ && mv bin/cc-check-macos-x86_64 bin/cc-check-darwin-x64 || true
-                  ;;
-                *macos-arm64.tar.gz)
-                  tar -xzf "/tmp/${filename}" -C bin/ && mv bin/cc-check-macos-arm64 bin/cc-check-darwin-arm64 || true
-                  ;;
-                *windows-x86_64.zip)
-                  unzip -q "/tmp/${filename}" -d bin/ && mv bin/cc-check-windows-x86_64.exe bin/cc-check-win32-x64.exe || true
-                  ;;
-              esac
-            done
-          
-          # Copy postinstall binary to bin directory
           cp target/release/postinstall bin/postinstall
           chmod +x bin/postinstall
-          
-          # Make binaries executable
-          chmod +x bin/cc-check-* || true
 
       - name: Publish to npm
         run: npm publish
@@ -280,52 +248,12 @@ jobs:
         id: tag
         run: echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
       - name: Download binaries from GitHub Release
-        run: |
-          mkdir -p cc_check/binaries
-          TAG="${{ steps.tag.outputs.TAG }}"
-          REPO="${{ github.repository }}"
-          
-          # Download all platform binaries
-          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/json" \
-            "https://api.github.com/repos/${REPO}/releases/tags/${TAG}" | \
-            jq -r '.assets[] | select(.name | test("^cc-check-.*\\.(tar\\.gz|zip)$")) | .browser_download_url' | \
-            while read url; do
-              filename=$(basename "$url")
-              curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                -H "Accept: application/octet-stream" \
-                "$url" -o "/tmp/${filename}"
-              
-              # Extract and organize binaries
-              case "$filename" in
-                *linux-x86_64.tar.gz)
-                  tar -xzf "/tmp/${filename}" -C cc_check/binaries/
-                  ;;
-                *linux-arm64.tar.gz)
-                  tar -xzf "/tmp/${filename}" -C cc_check/binaries/ && \
-                  mv cc_check/binaries/cc-check-linux-arm64 cc_check/binaries/cc-check-linux-aarch64 || true
-                  ;;
-                *macos-x86_64.tar.gz)
-                  tar -xzf "/tmp/${filename}" -C cc_check/binaries/ && \
-                  mv cc_check/binaries/cc-check-macos-x86_64 cc_check/binaries/cc-check-darwin-x86_64 || true
-                  ;;
-                *macos-arm64.tar.gz)
-                  tar -xzf "/tmp/${filename}" -C cc_check/binaries/ && \
-                  mv cc_check/binaries/cc-check-macos-arm64 cc_check/binaries/cc-check-darwin-arm64 || true
-                  ;;
-                *windows-x86_64.zip)
-                  unzip -q "/tmp/${filename}" -d cc_check/binaries/ && \
-                  mv cc_check/binaries/cc-check-windows-x86_64.exe cc_check/binaries/cc-check-win32-x86_64.exe || true
-                  ;;
-              esac
-            done
-          
-          # Make binaries executable
-          chmod +x cc_check/binaries/cc-check-* || true
+        uses: ./.github/actions/download-binaries
+        with:
+          tag: ${{ steps.tag.outputs.TAG }}
+          target-dir: cc_check/binaries
+          naming-convention: pypi
 
       - name: Create Python package structure
         run: |
