@@ -240,11 +240,11 @@ mod tests {
                 original_dir: original_dir.clone(),
             };
             let temp_dir = TempDir::new().unwrap();
-            let temp_path = std::fs::canonicalize(temp_dir.path()).unwrap();
+            let temp_path = temp_dir.path();
             let cargo_toml = temp_path.join("Cargo.toml");
             std::fs::write(&cargo_toml, "[package]\nname = \"test\"").unwrap();
 
-            std::env::set_current_dir(&temp_path).unwrap();
+            std::env::set_current_dir(temp_path).unwrap();
             // Verify we're in the right directory and the file exists
             let current = std::env::current_dir().unwrap();
             assert!(
@@ -259,8 +259,8 @@ mod tests {
             );
 
             let root = find_repo_root().unwrap();
-            // Use canonicalize to handle symlink differences (e.g., /var vs /private/var on macOS)
-            let expected = temp_path;
+            // Use canonicalize to handle symlink differences and Windows path representations
+            let expected = std::fs::canonicalize(temp_path).unwrap();
             let actual = std::fs::canonicalize(&root).unwrap();
             assert_eq!(actual, expected);
         }
