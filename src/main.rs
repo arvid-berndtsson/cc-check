@@ -199,8 +199,9 @@ fn install_hook(no_build: bool) -> Result<()> {
 
     // Backup existing hook
     if commit_msg_hook.exists() {
-        let hook_filename = commit_msg_hook.file_name().unwrap().to_string_lossy();
-        let backup = hooks_dir.join(format!("{}.backup", hook_filename));
+        // Use with_extension to replace the extension (e.g., commit-msg.bat -> commit-msg.backup)
+        // This works correctly for both Windows (.bat) and Unix (no extension) hooks
+        let backup = commit_msg_hook.with_extension("backup");
         if !backup.exists() {
             fs::copy(&commit_msg_hook, &backup).with_context(|| {
                 format!(
@@ -356,6 +357,91 @@ fn exit_with(format: OutputFormat, res: std::result::Result<(), ValidationError>
                 })?
             );
             std::process::exit(1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    mod shell_escaping {
+        use super::*;
+
+        #[test]
+        fn handles_regular_paths() {
+            let path = "/usr/bin/cc-check";
+            let escaped = shell_escape(path);
+            assert_eq!(escaped, "'/usr/bin/cc-check'");
+        }
+
+        #[test]
+        fn handles_paths_with_spaces() {
+            let path = "/path with spaces/cc-check";
+            let escaped = shell_escape(path);
+            assert_eq!(escaped, "'/path with spaces/cc-check'");
+        }
+
+        #[test]
+        fn handles_paths_with_quotes() {
+            let path = "/path'with'quotes/cc-check";
+            let escaped = shell_escape(path);
+            assert_eq!(escaped, "'/path'\\''with'\\''quotes/cc-check'");
+        }
+    }
+
+    mod unix_hook {
+        use super::*;
+
+        #[test]
+        fn escapes_paths() {
+            let path = PathBuf::from("/usr/bin/cc-check");
+            let hook = create_unix_hook(&path).unwrap();
+            assert!(hook.contains("exec '/usr/bin/cc-check'"));
+            assert!(hook.contains("#!/bin/sh"));
+            assert!(hook.contains("check \"$1\""));
+        }
+
+        #[test]
+        fn converts_windows_paths() {
+            let path = PathBuf::from("C:\\Program Files\\cc-check.exe");
+            let hook = create_unix_hook(&path).unwrap();
+            assert!(hook.contains("C:/Program Files/cc-check.exe"));
+        }
+
+        #[test]
+        fn handles_paths_with_spaces() {
+            let path = PathBuf::from("/path with spaces/cc-check");
+            let hook = create_unix_hook(&path).unwrap();
+            assert!(hook.contains("'/path with spaces/cc-check'"));
+        }
+    }
+
+    mod windows_hook {
+        use super::*;
+
+        #[test]
+        fn wraps_paths_in_quotes() {
+            let path = PathBuf::from("C:\\Program Files\\cc-check.exe");
+            let hook = create_windows_hook(&path).unwrap();
+            assert!(hook.contains("\"C:\\Program Files\\cc-check.exe\""));
+            assert!(hook.contains("@echo off"));
+            assert!(hook.contains("check \"%~1\""));
+        }
+
+        #[test]
+        fn escapes_quotes_in_paths() {
+            let path = PathBuf::from("C:\\path\"with\"quotes\\cc-check.exe");
+            let hook = create_windows_hook(&path).unwrap();
+            assert!(hook.contains("\"C:\\path\"\"with\"\"quotes\\cc-check.exe\""));
+        }
+
+        #[test]
+        fn handles_paths_with_spaces() {
+            let path = PathBuf::from("C:\\My Programs\\cc-check.exe");
+            let hook = create_windows_hook(&path).unwrap();
+            assert!(hook.contains("\"C:\\My Programs\\cc-check.exe\""));
         }
     }
 }
