@@ -218,11 +218,27 @@ mod tests {
 
     mod repo_root {
         use super::*;
+        use std::path::PathBuf;
+
+        struct DirGuard {
+            original_dir: PathBuf,
+        }
+
+        impl Drop for DirGuard {
+            fn drop(&mut self) {
+                // Try to restore the original directory, but don't panic if it fails
+                // (e.g., if the directory was deleted in CI)
+                let _ = std::env::set_current_dir(&self.original_dir);
+            }
+        }
 
         #[test]
         fn find_repo_root_finds_cargo_toml() {
             use tempfile::TempDir;
             let original_dir = std::env::current_dir().unwrap();
+            let _guard = DirGuard {
+                original_dir: original_dir.clone(),
+            };
             let temp_dir = TempDir::new().unwrap();
             let cargo_toml = temp_dir.path().join("Cargo.toml");
             std::fs::write(&cargo_toml, "[package]\nname = \"test\"").unwrap();
@@ -233,13 +249,15 @@ mod tests {
             let expected = std::fs::canonicalize(temp_dir.path()).unwrap();
             let actual = std::fs::canonicalize(&root).unwrap();
             assert_eq!(actual, expected);
-            std::env::set_current_dir(original_dir).unwrap();
         }
 
         #[test]
         fn find_repo_root_finds_git_dir() {
             use tempfile::TempDir;
             let original_dir = std::env::current_dir().unwrap();
+            let _guard = DirGuard {
+                original_dir: original_dir.clone(),
+            };
             let temp_dir = TempDir::new().unwrap();
             let git_dir = temp_dir.path().join(".git");
             std::fs::create_dir(&git_dir).unwrap();
@@ -250,13 +268,15 @@ mod tests {
             let expected = std::fs::canonicalize(temp_dir.path()).unwrap();
             let actual = std::fs::canonicalize(&root).unwrap();
             assert_eq!(actual, expected);
-            std::env::set_current_dir(original_dir).unwrap();
         }
 
         #[test]
         fn find_repo_root_finds_parent_with_cargo_toml() {
             use tempfile::TempDir;
             let original_dir = std::env::current_dir().unwrap();
+            let _guard = DirGuard {
+                original_dir: original_dir.clone(),
+            };
             let temp_dir = TempDir::new().unwrap();
             let sub_dir = temp_dir.path().join("sub").join("dir");
             std::fs::create_dir_all(&sub_dir).unwrap();
@@ -269,13 +289,15 @@ mod tests {
             let expected = std::fs::canonicalize(temp_dir.path()).unwrap();
             let actual = std::fs::canonicalize(&root).unwrap();
             assert_eq!(actual, expected);
-            std::env::set_current_dir(original_dir).unwrap();
         }
 
         #[test]
         fn find_repo_root_fails_when_no_repo_found() {
             use tempfile::TempDir;
             let original_dir = std::env::current_dir().unwrap();
+            let _guard = DirGuard {
+                original_dir: original_dir.clone(),
+            };
             let temp_dir = TempDir::new().unwrap();
             let sub_dir = temp_dir.path().join("sub").join("dir");
             std::fs::create_dir_all(&sub_dir).unwrap();
@@ -287,7 +309,6 @@ mod tests {
                 .unwrap_err()
                 .to_string()
                 .contains("could not find repository root"));
-            std::env::set_current_dir(original_dir).unwrap();
         }
     }
 }
