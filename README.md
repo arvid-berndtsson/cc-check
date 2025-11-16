@@ -145,38 +145,33 @@ BREAKING CHANGE: The old API endpoint is deprecated
 
 ## Pre-commit Integration
 
-This repository includes a `.pre-commit-config.yaml` configured for the `commit-msg` stage using a local hook:
+This repository includes a `.pre-commit-config.yaml` with hooks that run the same checks as CI:
 
-```yaml
-repos:
-  - repo: local
-    hooks:
-      - id: conventional-commit-check
-        name: Conventional Commit Checker (Rust)
-        entry: cargo
-        args: ['run', '--quiet', '--release', '--bin', 'pre-commit-hook', '--']
-        language: system
-        stages: [commit-msg]
-        pass_filenames: true
-        always_run: true
-```
+1. **Rust Format Check** - Validates code formatting with `cargo fmt --all -- --check`
+2. **Rust Clippy** - Runs linter with `cargo clippy --all-targets --all-features -- -D warnings`
+3. **Conventional Commit Check** - Validates commit message format
 
-Install and enable pre-commit in your repo:
+Install and enable pre-commit hooks:
 
 ```bash
+# Install all hooks (pre-commit and commit-msg)
+pre-commit install
 pre-commit install --hook-type commit-msg
 ```
 
-The configuration uses `cargo run` to execute the `pre-commit-hook` binary, which will:
-- Use the built `cc-check` binary if available (`target/release/cc-check` or `target/debug/cc-check`)
-- Fall back to `cargo run --release --bin cc-check` if the binary doesn't exist yet
+The hooks will automatically:
+- Check Rust code formatting before commits
+- Run clippy linter to catch common issues
+- Validate commit messages follow conventional commit format
 
 **Note:** For best performance, build the release binaries:
 ```bash
 cargo build --release
 ```
 
-This ensures the hook runs quickly without needing to compile on each commit. The first run may be slower as it compiles the binaries, but subsequent runs will use the cached binaries.
+This ensures the hooks run quickly without needing to compile on each commit. The first run may be slower as it compiles the binaries, but subsequent runs will use the cached binaries.
+
+If formatting fails, run `cargo fmt --all` to auto-format your code, then re-stage and commit.
 
 ## Building
 
