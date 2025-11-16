@@ -1,6 +1,8 @@
 # cc-check
 
-A Rust-based tool to validate git commit messages against the [Conventional Commits](https://www.conventionalcommits.org/) specification. This tool hooks into git's commit-msg hook to automatically validate commit messages.
+A cross-platform Rust-based tool to validate git commit messages against the [Conventional Commits](https://www.conventionalcommits.org/) specification. This tool hooks into git's commit-msg hook to automatically validate commit messages.
+
+**Works on Windows, Linux, and macOS** - The same installation and usage works across all platforms.
 
 ## Features
 
@@ -18,28 +20,32 @@ A Rust-based tool to validate git commit messages against the [Conventional Comm
 ### Prerequisites
 
 - Rust and Cargo installed ([rustup.rs](https://rustup.rs/))
+- Git installed
+
+### Cross-Platform Support
+
+`cc-check` works on **Windows**, **Linux**, and **macOS**. The installation process is the same on all platforms.
 
 ### Install the Git Hook
 
-1. Build and install the hook:
-   ```bash
-   ./install.sh
-   ```
+The easiest way to install the git hook is using the built-in install command:
 
-   This will:
-   - Build the Rust binary in release mode
-   - Install the commit-msg hook in your `.git/hooks/` directory
-   - Backup any existing commit-msg hook
+```bash
+# Build and install (recommended)
+cargo run --release -- install
 
-2. Alternatively, you can manually:
-   ```bash
-   # Build the project
-   cargo build --release
-   
-   # Copy the hook (adjust path as needed)
-   cp git-hooks/commit-msg .git/hooks/commit-msg
-   chmod +x .git/hooks/commit-msg
-   ```
+# Or if already built
+cargo build --release
+./target/release/cc-check install
+```
+
+This will:
+- Build the Rust binary in release mode (unless `--no-build` is used)
+- Install a cross-platform commit-msg hook in your `.git/hooks/` directory
+- Backup any existing commit-msg hook
+- Work on Windows, Linux, and macOS
+
+**Note:** On Windows, the hook uses a `.bat` file if needed, but Git Bash (included with Git for Windows) can also run `.sh` hooks.
 
 ## Usage
 
@@ -60,23 +66,28 @@ git commit -m "feat: add new feature"
 You can also use the checker directly:
 
 ```bash
-# Read from stdin
-echo "feat: add feature" | cargo run --release
+# Check a commit message file
+cc-check check .git/COMMIT_EDITMSG
 
-# Or from a file
-cargo run --release -- .git/COMMIT_EDITMSG
+# Or use backward-compatible syntax (file path as first argument)
+cc-check .git/COMMIT_EDITMSG
 
-# Verbose output
-cargo run --release -- --verbose --file COMMIT_EDITMSG
+# With JSON output
+cc-check check --format json .git/COMMIT_EDITMSG
+
+# With custom types
+cc-check check --extra-types "wip,release" .git/COMMIT_EDITMSG
 ```
 
 ### Command-Line Flags
 
+Use `cc-check check --help` to see all available flags:
+
 - `--extra-types "wip,release"` - Add custom allowed types
 - `--max-subject 0` - Disable subject length check
-- `--no-trailing-period=false` - Allow trailing period
+- `--no-trailing-period` - Disallow trailing period (default: true)
 - `--format json` - Machine-readable output (`{"ok":true}` or `{ "ok": false, "error": "..." }`)
-- `--no-allow-merge-commits` - Disable merge/revert message validation
+- `--allow-merge-commits` - Allow merge/revert message validation (default: true)
 
 ### Commit Message Format
 
@@ -176,26 +187,121 @@ cargo build --release
 cargo test
 ```
 
-## Publishing to crates.io
+## Publishing
 
-This repository is configured to publish to crates.io using GitHub Actions:
+This project is configured for multi-language distribution. See [PUBLISHING.md](PUBLISHING.md) for complete publishing instructions.
 
-- Pull requests targeting `main` will run `cargo publish --dry-run` to validate the package.
-- Pushing a tag named `vX.Y.Z` to the repository will trigger a publish to crates.io.
+### Quick Start
 
-Setup steps:
+1. **Set up GitHub Secrets**:
+   - `CARGO_REGISTRY_TOKEN` - for crates.io
+   - `NPM_TOKEN` - for npm
+   - `PYPI_API_TOKEN` - for PyPI
 
-1. Create a crates.io API token in your account (`Settings` → `API Tokens`).
-2. Add the token to this repository secrets as `CARGO_REGISTRY_TOKEN` (`Settings` → `Secrets and variables` → `Actions`).
-3. Bump the version in `Cargo.toml` and create a tag:
-
+2. **Create a release**:
    ```bash
-   git commit -am "chore(release): vX.Y.Z"
-   git tag vX.Y.Z
+   # Update versions in Cargo.toml, package.json, pyproject.toml
+   git commit -am "chore(release): v0.1.0"
+   git tag v0.1.0
    git push origin main --tags
    ```
 
-The workflow will build, test, dry-run, and then publish the crate.
+3. **GitHub Actions will automatically**:
+   - Build binaries for Windows, Linux, macOS (x86_64 and ARM64)
+   - Create GitHub Release with all binaries
+   - Publish to crates.io (Rust)
+   - Publish to npm (Node.js)
+   - Publish to PyPI (Python)
+
+See [PUBLISHING.md](PUBLISHING.md) for detailed instructions.
+
+## Using from Different Language Ecosystems
+
+`cc-check` can be used from any language ecosystem that can execute binaries:
+
+### Rust
+
+```toml
+# Cargo.toml
+[dependencies]
+cc-check = "0.1.0"  # When published to crates.io
+```
+
+Or use as a binary:
+```bash
+cargo install cc-check
+cc-check check .git/COMMIT_EDITMSG
+```
+
+### Node.js / npm
+
+Install as a binary dependency:
+```bash
+npm install --save-dev cc-check
+npx cc-check check .git/COMMIT_EDITMSG
+```
+
+Or use in package.json scripts:
+```json
+{
+  "scripts": {
+    "commit-msg": "cc-check check"
+  }
+}
+```
+
+### Python
+
+Install via pip (when available):
+```bash
+pip install cc-check
+cc-check check .git/COMMIT_EDITMSG
+```
+
+Or use as a pre-commit hook:
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: cc-check
+        name: cc-check
+        entry: cc-check check
+        language: system
+        stages: [commit-msg]
+```
+
+### Go
+
+Use as an external tool:
+```go
+package main
+
+import (
+    "os/exec"
+)
+
+func main() {
+    cmd := exec.Command("cc-check", "check", ".git/COMMIT_EDITMSG")
+    // ... handle output
+}
+```
+
+### Deno
+
+```typescript
+const process = Deno.run({
+  cmd: ["cc-check", "check", ".git/COMMIT_EDITMSG"],
+});
+await process.status();
+```
+
+**Note:** For multi-language distribution, you'll need to:
+1. Build binaries for each platform (Windows, Linux, macOS)
+2. Package them appropriately for each ecosystem
+3. Publish to respective package registries (npm, PyPI, crates.io, etc.)
+
+The core Rust implementation ensures consistent behavior across all platforms and language bindings.
 
 ## Uninstallation
 

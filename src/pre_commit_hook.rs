@@ -21,7 +21,15 @@ fn find_repo_root() -> Result<PathBuf> {
 }
 
 fn main() -> Result<()> {
-    let args: Vec<String> = env::args().skip(1).collect();
+    let mut args: Vec<String> = env::args().skip(1).collect();
+
+    // If first arg doesn't start with '-', it's the commit message file
+    // We need to prepend "check" subcommand
+    if !args.is_empty() && !args[0].starts_with('-') && args[0] != "check" {
+        args.insert(0, "check".to_string());
+    } else if args.is_empty() {
+        args.push("check".to_string());
+    }
 
     let repo_root = find_repo_root()?;
 
@@ -61,6 +69,8 @@ fn main() -> Result<()> {
         cmd.arg("run");
         cmd.arg("--quiet");
         cmd.arg("--release");
+        cmd.arg("--bin");
+        cmd.arg("cc-check");
         cmd.arg("--");
         cmd.args(&args);
         cmd.current_dir(&repo_root);

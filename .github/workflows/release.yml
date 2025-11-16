@@ -1,0 +1,326 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Set version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build for Linux (x86_64)
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+
+      - name: Build for Linux (ARM64)
+        run: |
+          rustup target add aarch64-unknown-linux-gnu
+          cargo build --release --target aarch64-unknown-linux-gnu
+
+      - name: Build for macOS (x86_64)
+        run: |
+          rustup target add x86_64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+
+      - name: Build for macOS (ARM64)
+        run: |
+          rustup target add aarch64-apple-darwin
+          cargo build --release --target aarch64-apple-darwin
+
+      - name: Build for Windows (x86_64)
+        run: |
+          rustup target add x86_64-pc-windows-msvc
+          cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Create release artifacts
+        run: |
+          mkdir -p release
+          cp target/x86_64-unknown-linux-gnu/release/cc-check release/cc-check-linux-x86_64
+          cp target/aarch64-unknown-linux-gnu/release/cc-check release/cc-check-linux-arm64
+          cp target/x86_64-apple-darwin/release/cc-check release/cc-check-macos-x86_64
+          cp target/aarch64-apple-darwin/release/cc-check release/cc-check-macos-arm64
+          cp target/x86_64-pc-windows-msvc/release/cc-check.exe release/cc-check-windows-x86_64.exe
+          
+          # Create tarballs
+          tar czf release/cc-check-linux-x86_64.tar.gz -C release cc-check-linux-x86_64
+          tar czf release/cc-check-linux-arm64.tar.gz -C release cc-check-linux-arm64
+          tar czf release/cc-check-macos-x86_64.tar.gz -C release cc-check-macos-x86_64
+          tar czf release/cc-check-macos-arm64.tar.gz -C release cc-check-macos-arm64
+          zip -j release/cc-check-windows-x86_64.zip release/cc-check-windows-x86_64.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-crates-io:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: build-and-release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish to crates.io
+        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  publish-npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: build-and-release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Get release tag
+        id: tag
+        run: echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build postinstall binary
+        run: cargo build --release --bin postinstall
+
+      - name: Download binaries from GitHub Release
+        run: |
+          mkdir -p bin
+          TAG="${{ steps.tag.outputs.TAG }}"
+          REPO="${{ github.repository }}"
+          
+          # Download all platform binaries
+          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/json" \
+            "https://api.github.com/repos/${REPO}/releases/tags/${TAG}" | \
+            jq -r '.assets[] | select(.name | test("^cc-check-.*\\.(tar\\.gz|zip)$")) | .browser_download_url' | \
+            while read url; do
+              filename=$(basename "$url")
+              curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                -H "Accept: application/octet-stream" \
+                "$url" -o "/tmp/${filename}"
+              
+              # Extract binaries
+              case "$filename" in
+                *linux-x86_64.tar.gz)
+                  tar -xzf "/tmp/${filename}" -C bin/ && mv bin/cc-check-linux-x86_64 bin/cc-check-linux-x64 || true
+                  ;;
+                *linux-arm64.tar.gz)
+                  tar -xzf "/tmp/${filename}" -C bin/ && mv bin/cc-check-linux-arm64 bin/cc-check-linux-arm64 || true
+                  ;;
+                *macos-x86_64.tar.gz)
+                  tar -xzf "/tmp/${filename}" -C bin/ && mv bin/cc-check-macos-x86_64 bin/cc-check-darwin-x64 || true
+                  ;;
+                *macos-arm64.tar.gz)
+                  tar -xzf "/tmp/${filename}" -C bin/ && mv bin/cc-check-macos-arm64 bin/cc-check-darwin-arm64 || true
+                  ;;
+                *windows-x86_64.zip)
+                  unzip -q "/tmp/${filename}" -d bin/ && mv bin/cc-check-windows-x86_64.exe bin/cc-check-win32-x64.exe || true
+                  ;;
+              esac
+            done
+          
+          # Copy postinstall binary to bin directory
+          cp target/release/postinstall bin/postinstall
+          chmod +x bin/postinstall
+          
+          # Make binaries executable
+          chmod +x bin/cc-check-* || true
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: build-and-release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Get release tag
+        id: tag
+        run: echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Download binaries from GitHub Release
+        run: |
+          mkdir -p cc_check/binaries
+          TAG="${{ steps.tag.outputs.TAG }}"
+          REPO="${{ github.repository }}"
+          
+          # Download all platform binaries
+          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/json" \
+            "https://api.github.com/repos/${REPO}/releases/tags/${TAG}" | \
+            jq -r '.assets[] | select(.name | test("^cc-check-.*\\.(tar\\.gz|zip)$")) | .browser_download_url' | \
+            while read url; do
+              filename=$(basename "$url")
+              curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                -H "Accept: application/octet-stream" \
+                "$url" -o "/tmp/${filename}"
+              
+              # Extract and organize binaries
+              case "$filename" in
+                *linux-x86_64.tar.gz)
+                  tar -xzf "/tmp/${filename}" -C cc_check/binaries/ && \
+                  mv cc_check/binaries/cc-check-linux-x86_64 cc_check/binaries/cc-check-linux-x86_64 || true
+                  ;;
+                *linux-arm64.tar.gz)
+                  tar -xzf "/tmp/${filename}" -C cc_check/binaries/ && \
+                  mv cc_check/binaries/cc-check-linux-arm64 cc_check/binaries/cc-check-linux-aarch64 || true
+                  ;;
+                *macos-x86_64.tar.gz)
+                  tar -xzf "/tmp/${filename}" -C cc_check/binaries/ && \
+                  mv cc_check/binaries/cc-check-macos-x86_64 cc_check/binaries/cc-check-darwin-x86_64 || true
+                  ;;
+                *macos-arm64.tar.gz)
+                  tar -xzf "/tmp/${filename}" -C cc_check/binaries/ && \
+                  mv cc_check/binaries/cc-check-macos-arm64 cc_check/binaries/cc-check-darwin-arm64 || true
+                  ;;
+                *windows-x86_64.zip)
+                  unzip -q "/tmp/${filename}" -d cc_check/binaries/ && \
+                  mv cc_check/binaries/cc-check-windows-x86_64.exe cc_check/binaries/cc-check-win32-x86_64.exe || true
+                  ;;
+              esac
+            done
+          
+          # Make binaries executable
+          chmod +x cc_check/binaries/cc-check-* || true
+
+      - name: Create Python package structure
+        run: |
+          mkdir -p cc_check
+          TAG="${{ steps.tag.outputs.TAG }}"
+          cat > cc_check/__init__.py << EOF
+          """cc-check: Cross-platform conventional commit checker."""
+          import os
+          import sys
+          import platform
+          import subprocess
+          from pathlib import Path
+          
+          __version__ = "${TAG}"
+          
+          def _get_binary_path():
+              """Get the path to the platform-specific binary."""
+              system = platform.system().lower()
+              machine = platform.machine().lower()
+              
+              # Map platform names
+              if system == 'darwin':
+                  system = 'darwin'
+                  arch = 'arm64' if machine in ('arm64', 'aarch64') else 'x86_64'
+              elif system == 'linux':
+                  system = 'linux'
+                  arch = 'aarch64' if machine in ('arm64', 'aarch64') else 'x86_64'
+              elif system == 'windows':
+                  system = 'win32'
+                  arch = 'x86_64'
+              else:
+                  raise OSError(f"Unsupported platform: {system}")
+              
+              binary_dir = Path(__file__).parent / 'binaries'
+              if system == 'win32':
+                  binary_name = f'cc-check-{system}-{arch}.exe'
+              else:
+                  binary_name = f'cc-check-{system}-{arch}'
+              
+              binary_path = binary_dir / binary_name
+              if not binary_path.exists():
+                  raise FileNotFoundError(f"Binary not found: {binary_path}")
+              
+              return binary_path
+          
+          def check(commit_msg_file=None, **kwargs):
+              """Run cc-check on a commit message file."""
+              binary = _get_binary_path()
+              cmd = [str(binary), 'check']
+              
+              if commit_msg_file:
+                  cmd.append(commit_msg_file)
+              
+              # Add kwargs as flags
+              for key, value in kwargs.items():
+                  if value is True:
+                      cmd.append(f'--{key.replace("_", "-")}')
+                  elif value is not None:
+                      cmd.append(f'--{key.replace("_", "-")}')
+                      cmd.append(str(value))
+              
+              result = subprocess.run(cmd, capture_output=True, text=True)
+              return result.returncode == 0, result.stdout, result.stderr
+          EOF
+          
+          cat > cc_check/__main__.py << 'EOF'
+          """Entry point for python -m cc_check."""
+          import sys
+          from cc_check import check
+          
+          def main():
+              commit_file = sys.argv[1] if len(sys.argv) > 1 else None
+              success, stdout, stderr = check(commit_file)
+              if stdout:
+                  print(stdout)
+              if stderr:
+                  print(stderr, file=sys.stderr)
+              sys.exit(0 if success else 1)
+          
+          if __name__ == '__main__':
+              main()
+          EOF
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        run: twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+

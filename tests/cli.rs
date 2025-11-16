@@ -36,7 +36,7 @@ fn cli_json_ok() {
     let file = write_temp("fix: correct bug");
     Command::cargo_bin("cc-check")
         .unwrap()
-        .args(["--format", "json"])
+        .args(["check", "--format", "json"])
         .arg(file.path())
         .assert()
         .success()
@@ -48,7 +48,7 @@ fn cli_json_error_contains_message() {
     let file = write_temp("wip: tmp");
     Command::cargo_bin("cc-check")
         .unwrap()
-        .args(["--format", "json"])
+        .args(["check", "--format", "json"])
         .arg(file.path())
         .assert()
         .failure()
@@ -108,4 +108,14 @@ fn pre_commit_hook_handles_nonexistent_file() {
         .stderr(predicate::str::contains(
             "failed to read commit message file",
         ));
+}
+
+#[test]
+fn install_command_shows_help() {
+    Command::cargo_bin("cc-check")
+        .unwrap()
+        .args(["install", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Install git commit-msg hook"));
 }

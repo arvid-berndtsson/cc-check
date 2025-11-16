@@ -1,9 +1,9 @@
 [package]
 name = "cc-check"
- version = "0.1.0"
- authors = ["Arvid Berndtsson <dev@arvid.tech>"]
- edition = "2021"
- description = "Conventional commit checker for use in pre-commit/commit-msg hooks"
+version = "0.1.0"
+authors = ["Arvid Berndtsson <dev@arvid.tech>"]
+edition = "2021"
+description = "Cross-platform conventional commit checker for use in pre-commit/commit-msg hooks"
 license = "MIT"
 repository = "https://github.com/arvid-berndtsson/cc-check"
 readme = "README.md"
@@ -29,6 +29,10 @@ path = "src/main.rs"
 [[bin]]
 name = "pre-commit-hook"
 path = "src/pre_commit_hook.rs"
+
+[[bin]]
+name = "postinstall"
+path = "src/postinstall.rs"
 
 [dev-dependencies]
 assert_cmd = "2.0"
