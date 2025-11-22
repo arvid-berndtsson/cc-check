@@ -12,19 +12,80 @@ This document explains how to publish `cc-check` to multiple package registries 
 
 ## Prerequisites
 
-### 1. GitHub Secrets
+### 1. Trusted Publishing Setup (Recommended)
 
-Add these secrets to your GitHub repository (`Settings` → `Secrets and variables` → `Actions`):
+This project uses **Trusted Publishing** for crates.io, npm, and PyPI, which eliminates the need for long-lived API tokens and significantly improves security. **No GitHub secrets are required for publishing!**
 
-- `CARGO_REGISTRY_TOKEN` - crates.io API token
-- `NPM_TOKEN` - npm access token (for publishing)
-- `PYPI_API_TOKEN` - PyPI API token
+#### crates.io Trusted Publishing
+
+1. **Publish your crate manually first** (required before setting up Trusted Publishing):
+   ```bash
+   cargo login <your-token>
+   cargo publish
+   ```
+
+2. **Link your GitHub repository**:
+   - Go to your crate page on [crates.io](https://crates.io)
+   - Navigate to **Settings** → **Repository**
+   - Link your GitHub repository: `arvid-berndtsson/cc-check`
+
+3. **Configure Trusted Publisher**:
+   - Go to your crate's **Settings** → **Trusted Publishers**
+   - Click **Add Trusted Publisher**
+   - Configure:
+     - **GitHub Organization/User**: `arvid-berndtsson`
+     - **Repository Name**: `cc-check`
+     - **Workflow Filename**: `release.yml`
+     - **Environment Name**: (leave empty unless using GitHub Environments)
+   - Click **Add**
+
+4. **Remove `CARGO_REGISTRY_TOKEN` secret** from GitHub (no longer needed)
+
+#### npm Trusted Publishing
+
+1. **Go to npm Trusted Publishers**:
+   - Visit: https://www.npmjs.com/settings/arvid-berndtsson/trusted-publishers
+   - Or navigate: npm → Your Profile → Access Tokens → Trusted Publishers
+
+2. **Add a new trusted publisher**:
+   - Click **Add Trusted Publisher**
+   - Configure:
+     - **Publisher name**: `github-actions` (or any name you prefer)
+     - **Workflow repository**: `arvid-berndtsson/cc-check`
+     - **Workflow file**: `.github/workflows/release.yml`
+     - **Environment**: (leave empty unless using GitHub Environments)
+   - Click **Add**
+
+3. **Remove `NPM_TOKEN` secret** from GitHub (no longer needed)
+
+#### PyPI Trusted Publishing
+
+1. **Go to PyPI Trusted Publishers**:
+   - Visit: https://pypi.org/manage/account/publishing/
+   - Or navigate: PyPI → Your Profile → Account settings → Publishing
+
+2. **Add a new trusted publisher**:
+   - Click **Add a new pending publisher**
+   - Select the **GitHub** tab
+   - Fill in:
+     - **PyPI Project Name**: `cc-check`
+     - **Owner**: `arvid-berndtsson`
+     - **Repository Name**: `cc-check`
+     - **Workflow Filename**: `.github/workflows/release.yml`
+     - **Environment Name**: (leave empty unless using GitHub Environments)
+   - Click **Add**
+
+3. **Remove `PYPI_API_TOKEN` secret** from GitHub (no longer needed)
 
 ### 2. Package Registry Accounts
 
-- **crates.io**: Create account at https://crates.io, generate API token
-- **npm**: Create account at https://www.npmjs.com, generate access token
-- **PyPI**: Create account at https://pypi.org, generate API token
+- **crates.io**: Create account at https://crates.io (for initial manual publish)
+- **npm**: Create account at https://www.npmjs.com
+- **PyPI**: Create account at https://pypi.org
+
+### 3. GitHub Secrets
+
+**No secrets required!** All publishing uses Trusted Publishing with OIDC authentication.
 
 ## Publishing Process
 
@@ -71,6 +132,7 @@ If you prefer to publish manually:
 ### crates.io
 
 ```bash
+# Only needed for initial manual publish before setting up Trusted Publishing
 cargo login <your-token>
 cargo publish
 ```
@@ -168,22 +230,26 @@ Update all version numbers in:
 ### crates.io
 
 - **Error**: "crate already exists" - Version already published, bump version
-- **Error**: "invalid token" - Check `CARGO_REGISTRY_TOKEN` secret
+- **Error**: "authentication failed" - Verify Trusted Publisher is configured correctly in crate settings
+- **Error**: "repository not linked" - Link your GitHub repository in crate settings
 
 ### npm
 
 - **Error**: "package name taken" - Choose different name or use scoped package (`@your-org/cc-check`)
-- **Error**: "unauthorized" - Check `NPM_TOKEN` secret
+- **Error**: "unauthorized" - Verify Trusted Publisher is configured correctly in npm settings
+- **Error**: "OTP required" - Trusted Publishing should eliminate this; verify OIDC setup
 
 ### PyPI
 
 - **Error**: "File already exists" - Version already published, bump version
-- **Error**: "invalid credentials" - Check `PYPI_API_TOKEN` secret
+- **Error**: "authentication failed" - Verify Trusted Publisher is configured correctly in PyPI settings
+- **Error**: "publisher not found" - Ensure the trusted publisher is added and approved in PyPI
 
 ## Next Steps
 
-1. Set up GitHub Secrets
-2. Create accounts on all registries
-3. Test the workflow with a pre-release version (e.g., `0.1.0-alpha.1`)
-4. Publish first stable release
+1. Set up Trusted Publishing for crates.io and npm (see Prerequisites above)
+2. Add `PYPI_API_TOKEN` secret to GitHub (only secret needed)
+3. Create accounts on all registries
+4. Test the workflow with a pre-release version (e.g., `0.1.0-alpha.1`)
+5. Publish first stable release
 
