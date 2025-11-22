@@ -12,19 +12,65 @@ This document explains how to publish `cc-check` to multiple package registries 
 
 ## Prerequisites
 
-### 1. GitHub Secrets
+### 1. Trusted Publishing Setup (Recommended)
 
-Add these secrets to your GitHub repository (`Settings` → `Secrets and variables` → `Actions`):
+This project uses **Trusted Publishing** for both crates.io and npm, which eliminates the need for long-lived API tokens and significantly improves security. No GitHub secrets are required for publishing!
 
-- `CARGO_REGISTRY_TOKEN` - crates.io API token
-- `NPM_TOKEN` - npm access token (for publishing)
-- `PYPI_API_TOKEN` - PyPI API token
+#### crates.io Trusted Publishing
+
+1. **Publish your crate manually first** (required before setting up Trusted Publishing):
+   ```bash
+   cargo login <your-token>
+   cargo publish
+   ```
+
+2. **Link your GitHub repository**:
+   - Go to your crate page on [crates.io](https://crates.io)
+   - Navigate to **Settings** → **Repository**
+   - Link your GitHub repository: `arvid-berndtsson/cc-check`
+
+3. **Configure Trusted Publisher**:
+   - Go to your crate's **Settings** → **Trusted Publishers**
+   - Click **Add Trusted Publisher**
+   - Configure:
+     - **GitHub Organization/User**: `arvid-berndtsson`
+     - **Repository Name**: `cc-check`
+     - **Workflow Filename**: `release.yml`
+     - **Environment Name**: (leave empty unless using GitHub Environments)
+   - Click **Add**
+
+4. **Remove `CARGO_REGISTRY_TOKEN` secret** from GitHub (no longer needed)
+
+#### npm Trusted Publishing
+
+1. **Go to npm Trusted Publishers**:
+   - Visit: https://www.npmjs.com/settings/arvid-berndtsson/trusted-publishers
+   - Or navigate: npm → Your Profile → Access Tokens → Trusted Publishers
+
+2. **Add a new trusted publisher**:
+   - Click **Add Trusted Publisher**
+   - Configure:
+     - **Publisher name**: `github-actions` (or any name you prefer)
+     - **Workflow repository**: `arvid-berndtsson/cc-check`
+     - **Workflow file**: `.github/workflows/release.yml`
+     - **Environment**: (leave empty unless using GitHub Environments)
+   - Click **Add**
+
+3. **Remove `NPM_TOKEN` secret** from GitHub (no longer needed)
 
 ### 2. Package Registry Accounts
 
-- **crates.io**: Create account at https://crates.io, generate API token
-- **npm**: Create account at https://www.npmjs.com, generate access token
-- **PyPI**: Create account at https://pypi.org, generate API token
+- **crates.io**: Create account at https://crates.io (for initial manual publish)
+- **npm**: Create account at https://www.npmjs.com
+- **PyPI**: Create account at https://pypi.org, generate API token (still requires token)
+
+### 3. GitHub Secrets (Legacy/Alternative)
+
+If you prefer to use tokens instead of Trusted Publishing:
+
+- `CARGO_REGISTRY_TOKEN` - crates.io API token (only needed if not using Trusted Publishing)
+- `NPM_TOKEN` - npm access token (only needed if not using Trusted Publishing)
+- `PYPI_API_TOKEN` - PyPI API token (required, no Trusted Publishing available)
 
 ## Publishing Process
 
