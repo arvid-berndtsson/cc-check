@@ -48,3 +48,6 @@ bin/
 # Test artifacts
 *.tmp
 test_*.txt
+
+# Local configuration
+.cc-check.toml
